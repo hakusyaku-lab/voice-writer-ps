@@ -1,0 +1,9 @@
+# APIキーを含む設定や原稿は公開しない
+config.json
+*.local.json
+.env
+音声原稿/
+*.txt
+!LICENSE
+*.md.bak
+Thumbs.db

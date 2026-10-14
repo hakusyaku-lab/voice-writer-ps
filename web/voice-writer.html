@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#141210">
+  <title>音声原稿</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #141210;
+      --paper: #1b1916;
+      --ink: #ebe4d6;
+      --muted: #9a9286;
+      --faint: #6e675c;
+      --line: #2c2924;
+      --btn: #25221e;
+      --btn-hover: #312d28;
+      --mic: #d7cbb6;
+      --mic-ink: #1a1714;
+      --listen: #c45c4a;
+      --listen-soft: rgba(196, 92, 74, 0.28);
+      --ok: #c9b896;
+      --radius: 12px;
+      --pad: 22px;
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-t: env(safe-area-inset-top, 0px);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    body {
+      font-family: "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic Medium", "Yu Gothic", "Meiryo", sans-serif;
+      font-feature-settings: "palt";
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+      padding: calc(14px + var(--safe-t)) 16px calc(16px + var(--safe-b));
+    }
+
+    .wrap {
+      width: min(720px, 100%);
+      margin: 0 auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    header {
+      flex: 0 0 auto;
+      padding: 4px 4px 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--ink);
+    }
+
+    .hint {
+      margin: 8px 0 0;
+      font-size: 0.78rem;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .editor-shell {
+      flex: 1;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      min-height: 200px;
+      border: 0;
+      resize: none;
+      padding: 22px 22px 12px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 1.05rem;
+      line-height: 1.95;
+      letter-spacing: 0.03em;
+      outline: none;
+      caret-color: var(--mic);
+    }
+
+    textarea::placeholder {
+      color: var(--faint);
+    }
+
+    .interim {
+      min-height: 1.7em;
+      padding: 0 22px 12px;
+      font-size: 0.92rem;
+      line-height: 1.7;
+      color: var(--ok);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .interim.show { opacity: 1; }
+
+    .interim::before {
+      content: "いま　";
+      color: var(--faint);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+    }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 6px 0;
+      font-size: 0.75rem;
+      color: var(--faint);
+    }
+
+    .status {
+      min-height: 1.4em;
+    }
+
+    .status.listen {
+      color: #e8a195;
+    }
+
+    .status.warn {
+      color: #e0b080;
+    }
+
+    footer {
+      flex: 0 0 auto;
+      padding-top: 14px;
+      position: sticky;
+      bottom: 0;
+      background: linear-gradient(to top, var(--bg) 78%, transparent);
+    }
+
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: var(--btn);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 0.82rem;
+      letter-spacing: 0.06em;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    button:hover { background: var(--btn-hover); }
+    button:active { transform: scale(0.98); }
+
+    .mic-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding-bottom: 4px;
+    }
+
+    .mic {
+      width: 76px;
+      height: 76px;
+      padding: 0;
+      border-radius: 50%;
+      border: 0;
+      background: var(--mic);
+      color: var(--mic-ink);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .mic:hover { background: #e5d8c0; }
+
+    .mic.listening {
+      background: var(--listen);
+      color: #fff8f5;
+      animation: pulse 1.7s ease-out infinite;
+    }
+
+    .mic svg {
+      width: 30px;
+      height: 30px;
+      fill: currentColor;
+    }
+
+    .mic-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .unsupported {
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      border: 1px solid #5a4030;
+      background: #241c16;
+      color: #efd2b8;
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 var(--listen-soft); }
+      70% { box-shadow: 0 0 0 22px transparent; }
+      100% { box-shadow: 0 0 0 0 transparent; }
+    }
+
+    @media (max-width: 520px) {
+      body { padding-left: 12px; padding-right: 12px; }
+      textarea { font-size: 1.02rem; padding: 18px 16px 10px; }
+      .interim { padding-left: 16px; padding-right: 16px; }
+      .mic { width: 72px; height: 72px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>音声原稿</h1>
+      <p class="hint">Chrome で開く、マイクを許可、話して、コピーして note に貼る</p>
+    </header>
+
+    <div class="editor-shell">
+      <textarea
+        id="editor"
+        spellcheck="false"
+        autocomplete="off"
+        autocapitalize="off"
+        placeholder="マイクを押して話してください。何度でも続けて書けます。"
+      ></textarea>
+      <div id="interim" class="interim" aria-live="polite"></div>
+    </div>
+
+    <div class="meta">
+      <div id="status" class="status">待機中</div>
+      <div id="count">0 文字</div>
+    </div>
+
+    <div id="nosupport" class="unsupported" hidden>
+      このブラウザでは音声認識が使えません。Chrome を使ってください。
+    </div>
+
+    <footer>
+      <div class="tools">
+        <button type="button" id="btn-copy">コピー</button>
+        <button type="button" id="btn-dl">ダウンロード</button>
+        <button type="button" id="btn-clear">クリア</button>
+      </div>
+      <div class="mic-wrap">
+        <button type="button" id="mic" class="mic" aria-pressed="false" aria-label="音声入力">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
+          </svg>
+        </button>
+        <div id="mic-label" class="mic-label">タップして話す</div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = "voice-writer-draft";
+      const editor = document.getElementById("editor");
+      const interimEl = document.getElementById("interim");
+      const statusEl = document.getElementById("status");
+      const countEl = document.getElementById("count");
+      const micBtn = document.getElementById("mic");
+      const micLabel = document.getElementById("mic-label");
+      const nosupport = document.getElementById("nosupport");
+
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      let wantListen = false;
+      let restarting = false;
+      let caret = { start: 0, end: 0 };
+      let lastFinal = "";
+      let lastFinalAt = 0;
+      let saveTimer = 0;
+
+      function setStatus(text, kind) {
+        statusEl.textContent = text;
+        statusEl.className = "status" + (kind ? " " + kind : "");
+      }
+
+      function updateCount() {
+        countEl.textContent = editor.value.length.toLocaleString("ja-JP") + " 文字";
+      }
+
+      function saveDraft() {
+        try {
+          localStorage.setItem(STORAGE_KEY, editor.value);
+        } catch (e) {}
+      }
+
+      function scheduleSave() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveDraft, 200);
+      }
+
+      function rememberCaret() {
+        caret.start = editor.selectionStart;
+        caret.end = editor.selectionEnd;
+      }
+
+      function showInterim(text) {
+        const t = (text || "").trim();
+        if (!t) {
+          interimEl.textContent = "";
+          interimEl.classList.remove("show");
+          return;
+        }
+        interimEl.textContent = t;
+        interimEl.classList.add("show");
+      }
+
+      function applyVoiceCommands(raw) {
+        return raw
+          .replace(/改行/g, "\n")
+          .replace(/句点/g, "。")
+          .replace(/読点/g, "、");
+      }
+
+      function insertAtCaret(text) {
+        if (text == null || text === "") return;
+
+        const start = document.activeElement === editor ? editor.selectionStart : caret.start;
+        const end = document.activeElement === editor ? editor.selectionEnd : caret.end;
+
+        editor.focus({ preventScroll: true });
+        editor.setSelectionRange(start, end);
+
+        let ok = false;
+        try {
+          ok = document.execCommand("insertText", false, text);
+        } catch (e) {
+          ok = false;
+        }
+
+        if (!ok) {
+          editor.setRangeText(text, start, end, "end");
+          editor.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+
+        rememberCaret();
+        updateCount();
+        scheduleSave();
+      }
+
+      function insertFinal(raw) {
+        const text = applyVoiceCommands(raw).replace(/^[ \t\u3000]+/, "").replace(/[ \t\u3000]+$/, "");
+        if (text === "") return;
+
+        const now = Date.now();
+        const isBreak = text === "\n" || text === "\n\n";
+        if (!isBreak && text === lastFinal && now - lastFinalAt < 1600) return;
+
+        lastFinal = text;
+        lastFinalAt = now;
+        insertAtCaret(text);
+      }
+
+      function setListeningUI(on) {
+        micBtn.classList.toggle("listening", on);
+        micBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        micLabel.textContent = on ? "聞き取り中（タップで停止）" : "タップして話す";
+        editor.setAttribute("inputmode", on ? "none" : "text");
+        if (on) setStatus("聞いています…", "listen");
+        else {
+          setStatus("待機中");
+          showInterim("");
+        }
+      }
+
+      function safeStart() {
+        if (!recognition || !wantListen) return;
+        restarting = true;
+        try {
+          recognition.start();
+        } catch (e) {
+          restarting = false;
+        }
+      }
+
+      function stopListen() {
+        wantListen = false;
+        restarting = false;
+        setListeningUI(false);
+        if (recognition) {
+          try { recognition.stop(); } catch (e) {}
+        }
+      }
+
+      function startListen() {
+        if (!recognition) return;
+        wantListen = true;
+        lastFinal = "";
+        lastFinalAt = 0;
+        setListeningUI(true);
+        safeStart();
+      }
+
+      editor.addEventListener("input", function () {
+        rememberCaret();
+        updateCount();
+        scheduleSave();
+      });
+      editor.addEventListener("keyup", rememberCaret);
+      editor.addEventListener("click", rememberCaret);
+      editor.addEventListener("select", rememberCaret);
+      document.addEventListener("selectionchange", function () {
+        if (document.activeElement === editor) rememberCaret();
+      });
+
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) editor.value = saved;
+      } catch (e) {}
+      caret.start = caret.end = editor.value.length;
+      updateCount();
+
+      document.getElementById("btn-copy").addEventListener("click", async function () {
+        const text = editor.value;
+        try {
+          await navigator.clipboard.writeText(text);
+          setStatus("コピーしました");
+        } catch (e) {
+          editor.focus();
+          editor.select();
+          try {
+            document.execCommand("copy");
+            setStatus("コピーしました");
+          } catch (e2) {
+            setStatus("コピーできませんでした", "warn");
+          }
+          editor.setSelectionRange(caret.start, caret.end);
+        }
+      });
+
+      document.getElementById("btn-dl").addEventListener("click", function () {
+        const stamp = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Tokyo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).format(new Date());
+        const blob = new Blob([editor.value], { type: "text/markdown;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "音声原稿-" + stamp + ".md";
+        a.click();
+        URL.revokeObjectURL(a.href);
+        setStatus("ダウンロードしました");
+      });
+
+      document.getElementById("btn-clear").addEventListener("click", function () {
+        if (!editor.value) return;
+        if (!confirm("原稿をすべて消しますか？")) return;
+        editor.value = "";
+        caret.start = caret.end = 0;
+        lastFinal = "";
+        updateCount();
+        saveDraft();
+        editor.focus();
+        setStatus("クリアしました");
+      });
+
+      micBtn.addEventListener("click", function () {
+        if (!recognition) {
+          nosupport.hidden = false;
+          setStatus("Chrome を使ってください", "warn");
+          return;
+        }
+        if (wantListen) stopListen();
+        else startListen();
+      });
+
+      if (!SpeechRec) {
+        nosupport.hidden = false;
+        setStatus("Chrome を使ってください", "warn");
+        micBtn.disabled = true;
+        return;
+      }
+
+      recognition = new SpeechRec();
+      recognition.lang = "ja-JP";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = function () {
+        restarting = false;
+        if (wantListen) setListeningUI(true);
+      };
+
+      recognition.onresult = function (event) {
+        let interim = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const piece = event.results[i][0].transcript;
+          if (event.results[i].isFinal) insertFinal(piece);
+          else interim += piece;
+        }
+        showInterim(interim);
+      };
+
+      recognition.onerror = function (event) {
+        const err = event.error;
+        if (err === "no-speech" || err === "aborted") return;
+        if (err === "not-allowed" || err === "service-not-allowed") {
+          wantListen = false;
+          setListeningUI(false);
+          setStatus("マイクの許可が必要です", "warn");
+          return;
+        }
+        if (err === "audio-capture") {
+          wantListen = false;
+          setListeningUI(false);
+          setStatus("マイクが見つかりません", "warn");
+          return;
+        }
+        if (err === "network") {
+          setStatus("音声認識に接続できません", "warn");
+          return;
+        }
+      };
+
+      recognition.onend = function () {
+        showInterim("");
+        if (wantListen) {
+          setTimeout(function () {
+            if (wantListen) safeStart();
+          }, 80);
+        } else {
+          setListeningUI(false);
+        }
+      };
+
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible" && wantListen) safeStart();
+      });
+    })();
+  </script>
+</body>
+</html>
