@@ -28,6 +28,7 @@ $font  = New-Object System.Drawing.Font('Yu Gothic UI', 12)
 $small = New-Object System.Drawing.Font('Yu Gothic UI', 9)
 
 $form = New-Object System.Windows.Forms.Form
+$iconPath = Join-Path $PSScriptRoot 'icon.ico'; if (Test-Path $iconPath) { try { $form.Icon = New-Object System.Drawing.Icon($iconPath) } catch {} }
 $form.Text = '音声原稿'
 $form.Size = New-Object System.Drawing.Size(860, 680)
 $form.MinimumSize = New-Object System.Drawing.Size(560, 400)
@@ -107,50 +108,71 @@ $form.Add_KeyDown({ param($s,$e)
 })
 
 # --- speech
-$engine = $null; $script:listening = $false
-try {
-  $engine = New-Object System.Speech.Recognition.SpeechRecognitionEngine (New-Object System.Globalization.CultureInfo 'ja-JP')
-  $engine.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
-  $engine.SetInputToDefaultAudioDevice()
-} catch { $engine = $null; $status.Text = 'マイクか日本語音声認識が使えません' }
-
-$script:lastText = ''; $script:lastAt = [DateTime]::MinValue; $script:lastSpk = ''
-if ($engine) {
-  $engine.Add_SpeechHypothesized({ param($s,$e) $interim.Text = 'いま（' + $spk.Text + '）　' + $e.Result.Text })
-  $engine.Add_SpeechRecognized({ param($s,$e)
-    $interim.Text = ''
-    if ($e.Result.Confidence -lt 0.2) { return }
-    $t = ($e.Result.Text -replace '改行', "`r`n" -replace '句点', '。' -replace '読点', '、').Trim(" `t　")
-    if (-not $t) { return }
-    $now = Get-Date
-    if ($t -eq $script:lastText -and ($now - $script:lastAt).TotalMilliseconds -lt 1600) { return }
-    $script:lastText = $t; $script:lastAt = $now
-    if (-not $rb1.Checked) { $rb1.Checked = $true }
-    $who = $spk.Text
-    $tb.SelectionStart = $tb.TextLength
-    if ($who -ne '（なし）' -and $who -ne $script:lastSpk) {
-      $prefix = if ($tb.TextLength -gt 0 -and -not $tb.Text.EndsWith("`n")) { "`r`n" } else { '' }
-      $tb.SelectedText = $prefix + '[' + (Get-Date -Format 'HH:mm') + '] ' + $who + '：'
-      $script:lastSpk = $who
+$script:engine = $null; $script:listening = $false; $script:initErr = ''
+function Init-Engine {
+  if ($script:engine) { return $true }
+  try {
+    $rec = [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers() | Where-Object { $_.Culture.Name -eq 'ja-JP' } | Select-Object -First 1
+    if (-not $rec) { throw '日本語(ja-JP)の音声認識エンジンが見つかりません。設定→時刻と言語→言語で日本語の「音声認識」を追加してください。' }
+    $eng = New-Object System.Speech.Recognition.SpeechRecognitionEngine $rec
+    try { $eng.SetInputToDefaultAudioDevice() } catch {
+      throw ("既定の録音デバイスを開けません（" + $_.Exception.InnerException.Message + $_.Exception.Message + "）。`r`n設定→サウンド→入力で、使うマイク（例: TP35 Pro）を既定にしてください。")
     }
-    $tb.SelectedText = $t
-    $tb.ScrollToCaret()
-  })
+    $eng.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
+    $eng.BabbleTimeout = [TimeSpan]::FromSeconds(0)
+    $eng.EndSilenceTimeout = [TimeSpan]::FromMilliseconds(800)
+    $engine = $eng
+    $engine.Add_SpeechHypothesized({ param($s,$e) $interim.Text = 'いま（' + $spk.Text + '）　' + $e.Result.Text })
+    $engine.Add_SpeechRecognized({ param($s,$e)
+      $interim.Text = ''
+      # low-confidence results are kept (no drop)
+      $t = ($e.Result.Text -replace '改行', "`r`n" -replace '句点', '。' -replace '読点', '、').Trim(" `t　")
+      if (-not $t) { return }
+      $now = Get-Date
+      if ($t -eq $script:lastText -and ($now - $script:lastAt).TotalMilliseconds -lt 1600) { return }
+      $script:lastText = $t; $script:lastAt = $now
+      if (-not $rb1.Checked) { $rb1.Checked = $true }
+      $who = $spk.Text
+      $tb.SelectionStart = $tb.TextLength
+      if ($who -ne '（なし）' -and $who -ne $script:lastSpk) {
+        $prefix = if ($tb.TextLength -gt 0 -and -not $tb.Text.EndsWith("`n")) { "`r`n" } else { '' }
+        $tb.SelectedText = $prefix + '[' + (Get-Date -Format 'HH:mm') + '] ' + $who + '：'
+        $script:lastSpk = $who
+      }
+      $tb.SelectedText = $t
+      $tb.ScrollToCaret()
+    })
+    $engine.Add_AudioSignalProblemOccurred({ param($s,$e) if ($script:listening) { $status.Text = '聞いています…（' + $e.AudioSignalProblem + '）' } })
+    $engine.Add_AudioLevelUpdated({ param($s,$e) if ($script:listening) { $status.Text = '聞いています… 音量 ' + ('|' * [int]($e.AudioLevel / 10)) } })
+    $engine.Add_RecognizeCompleted({ param($s,$e) if ($script:listening) { try { $s.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple) } catch {} } })
+    $script:engine = $eng; $script:initErr = ''; return $true
+  } catch { $script:engine = $null; $script:initErr = $_.Exception.Message; return $false }
 }
 $spk.Add_SelectedIndexChanged({ $script:lastSpk = '' })
 $spk.Add_TextChanged({ $script:lastSpk = '' })
+$script:lastText = ''; $script:lastAt = [DateTime]::MinValue; $script:lastSpk = ''
+[void](Init-Engine)
+if ($script:initErr) { $status.Text = 'マイク未接続：🎤を押すと再試行します' }
 
 $mic.Add_Click({
-  if (-not $engine) { [System.Windows.Forms.MessageBox]::Show($status.Text, '音声原稿') | Out-Null; return }
+  if (-not (Init-Engine)) {
+    $r = [System.Windows.Forms.MessageBox]::Show("音声認識を開始できません。`r`n`r`n" + $script:initErr + "`r`n`r`nサウンド設定を開きますか？（マイクのプライバシー設定も確認してください）", '音声原稿', 'YesNo', 'Warning')
+    if ($r -eq 'Yes') { Start-Process 'ms-settings:sound'; Start-Process 'ms-settings:privacy-microphone' }
+    return
+  }
+  $engine = $script:engine
   if ($script:listening) {
-    $engine.RecognizeAsyncCancel(); $script:listening = $false
+    $script:listening = $false; $engine.RecognizeAsyncCancel()
     $mic.Text = '🎤 話す'; $mic.BackColor = $micC; $mic.ForeColor = $dark; $status.Text = '待機中'; $interim.Text = ''
   } else {
     $rb1.Checked = $true; $script:lastSpk = ''
-    $engine.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple); $script:listening = $true
+    try { $engine.SetInputToDefaultAudioDevice(); $engine.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple) }
+    catch { $script:engine = $null; [System.Windows.Forms.MessageBox]::Show("マイクを開けません：" + $_.Exception.Message + "`r`n設定→サウンド→入力で既定のマイクを確認してください。", '音声原稿') | Out-Null; return }
+    $script:listening = $true
     $mic.Text = '■ 停止'; $mic.BackColor = $recC; $mic.ForeColor = [System.Drawing.Color]::White; $status.Text = '聞いています…'
   }
 })
+
 
 # --- file 2 (needs API key, see README)
 $improve.Add_Click({
@@ -182,5 +204,5 @@ $clear.Add_Click({
   if ($tb.TextLength -eq 0) { return }
   if ([System.Windows.Forms.MessageBox]::Show(('ファイル{0}をすべて消しますか？' -f $script:cur), '音声原稿', 'YesNo') -eq 'Yes') { $tb.Clear(); $script:lastSpk = ''; $status.Text = 'クリアしました' }
 })
-$form.Add_FormClosing({ Save-Cur; if ($engine) { try { $engine.RecognizeAsyncCancel(); $engine.Dispose() } catch {} } })
+$form.Add_FormClosing({ Save-Cur; if ($script:engine) { try { $script:listening = $false; $script:engine.RecognizeAsyncCancel(); $script:engine.Dispose() } catch {} } })
 [System.Windows.Forms.Application]::Run($form)
